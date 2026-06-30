@@ -1,7 +1,8 @@
 # B(l)utter
 Flutter Mobile Application Reverse Engineering Tool by Compiling Dart AOT Runtime
 
-Currently the application supports only Android libapp.so (arm64 only).
+This fork adds experimental iOS IPA/Mach-O input support for Flutter
+`App.framework/App` snapshots. Android `libapp.so` remains supported.
 Also the application is currently work only against recent Dart versions.
 
 For high priority missing features, see [TODO](#todo)
@@ -57,6 +58,15 @@ The blutter.py will automatically detect the Dart version from the flutter engin
 
 If the blutter executable for required Dart version does not exists, the script will automatically checkout Dart source code and compiling it.
 
+For iOS Flutter IPAs, pass the IPA directly:
+```
+python3 blutter.py path/to/app.ipa out_dir
+```
+The script extracts `Payload/*.app/Frameworks/App.framework/App` and
+`Payload/*.app/Frameworks/Flutter.framework/Flutter`, detects the Dart snapshot
+hash/flags from the Mach-O symbol table, and builds an iOS Dart VM runtime when
+needed.
+
 ## Update
 You can use ```git pull``` to update and run blutter.py with ```--rebuild``` option to force rebuild the executable
 ```
@@ -94,5 +104,5 @@ python blutter.py path\to\lib\arm64-v8a build\vs --vs-sln
   - More internal classes
   - Object modification
 - Obfuscated app (still missing many functions)
-- Reading iOS binary
-- Input as apk or ipa
+- Broader iOS binary coverage
+- Universal/fat Mach-O input

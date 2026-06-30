@@ -47,7 +47,33 @@ class BlutterInput:
         self.blutter_file = os.path.join(BIN_DIR, self.blutter_name) + ('.exe' if os.name == 'nt' else '')
 
 
+def _first_existing_file(paths):
+    for path in paths:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _find_ios_app_framework_binary(indir: str, framework_name: str):
+    candidates = [
+        os.path.join(indir, 'Frameworks', f'{framework_name}.framework', framework_name),
+        os.path.join(indir, f'{framework_name}.framework', framework_name),
+    ]
+    found = _first_existing_file(candidates)
+    if found is not None:
+        return found
+
+    pattern = os.path.join(indir, '**', f'{framework_name}.framework', framework_name)
+    matches = glob.glob(pattern, recursive=True)
+    return matches[0] if matches else None
+
+
 def find_lib_files(indir: str):
+    app_file = _find_ios_app_framework_binary(indir, 'App')
+    flutter_file = _find_ios_app_framework_binary(indir, 'Flutter')
+    if app_file is not None and flutter_file is not None:
+        return os.path.abspath(app_file), os.path.abspath(flutter_file)
+
     app_file = os.path.join(indir, 'libapp.so')
     if not os.path.isfile(app_file):
         app_file = os.path.join(indir, 'App')
@@ -70,6 +96,30 @@ def extract_libs_from_apk(apk_file: str, out_dir: str):
         except:
             sys.exit("Cannot find libapp.so or libflutter.so in the APK")
 
+        zf.extract(app_info, out_dir)
+        zf.extract(flutter_info, out_dir)
+
+        app_file = os.path.join(out_dir, app_info.filename)
+        flutter_file = os.path.join(out_dir, flutter_info.filename)
+        return app_file, flutter_file
+
+def extract_libs_from_ipa(ipa_file: str, out_dir: str):
+    with zipfile.ZipFile(ipa_file, "r") as zf:
+        app_infos = [
+            info for info in zf.infolist()
+            if info.filename.startswith('Payload/')
+            and info.filename.endswith('/Frameworks/App.framework/App')
+        ]
+        flutter_infos = [
+            info for info in zf.infolist()
+            if info.filename.startswith('Payload/')
+            and info.filename.endswith('/Frameworks/Flutter.framework/Flutter')
+        ]
+        if not app_infos or not flutter_infos:
+            sys.exit("Cannot find App.framework/App or Flutter.framework/Flutter in the IPA")
+
+        app_info = app_infos[0]
+        flutter_info = flutter_infos[0]
         zf.extract(app_info, out_dir)
         zf.extract(flutter_info, out_dir)
 
@@ -225,6 +275,10 @@ def main(indir: str, outdir: str, rebuild_blutter: bool, create_vs_sln: bool, no
         with tempfile.TemporaryDirectory() as tmp_dir:
             libapp_file, libflutter_file = extract_libs_from_apk(indir, tmp_dir)
             main2(libapp_file, libflutter_file, outdir, rebuild_blutter, create_vs_sln, no_analysis)
+    elif indir.endswith(".ipa"):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            libapp_file, libflutter_file = extract_libs_from_ipa(indir, tmp_dir)
+            main2(libapp_file, libflutter_file, outdir, rebuild_blutter, create_vs_sln, no_analysis)
     else:
         libapp_file, libflutter_file = find_lib_files(indir)
         main2(libapp_file, libflutter_file, outdir, rebuild_blutter, create_vs_sln, no_analysis)
@@ -234,8 +288,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog='B(l)utter',
         description='Reversing a flutter application tool')
-    # TODO: accept ipa
-    parser.add_argument('indir', help='An apk or a directory that contains both libapp.so and libflutter.so')
+    parser.add_argument('indir', help='An apk, ipa, or directory that contains Flutter App and Flutter binaries')
     parser.add_argument('outdir', help='An output directory')
     parser.add_argument('--rebuild', action='store_true', default=False, help='Force rebuild the Blutter executable')
     parser.add_argument('--vs-sln', action='store_true', default=False, help='Generate Visual Studio solution at <outdir>')

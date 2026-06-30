@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 struct LibAppInfo {
 	const void* lib;
@@ -12,7 +13,7 @@ struct LibAppInfo {
 class ElfHelper final
 {
 public:
-	static LibAppInfo findSnapshots(const uint8_t* elf);
+	static LibAppInfo findSnapshots(const uint8_t* lib, size_t size);
 	static LibAppInfo MapLibAppSo(const char* path);
 
 private:
